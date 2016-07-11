@@ -1,0 +1,72 @@
+<!DOCTYPE html5>
+
+<html>
+
+<p> Connecting to Particle ... </p>
+<div id="message"></div>
+
+
+<button onclick='showDevices()'>list devices</button>
+
+<div id='device_list_Box'></div>
+
+
+<button onclick='changeState("ON")'>Turn On</button>
+
+<button onclick='changeState("OFF")'>Turn Off</button>
+
+<script type="text/javascript" src="//cdn.jsdelivr.net/particle-api-js/5/particle.min.js">
+</script>
+
+<script> 
+
+var particle = new Particle(),
+    msg = document.getElementById('message'),
+    devBox = document.getElementById('device_list_Box'),
+    token,
+    DEVICE_ID;
+
+    particle.login({username: 'mkejrvs@gmail.com', password: 'Guitar007'})
+      .then(
+        function(data) {
+          msg.innerHTML = 'API call completed on promise resolve: '; 
+          token = data.body.access_token;
+        },
+        function(err) {
+          msg.innerHTML = 'API call completed on promise fail: ' + err;
+        }
+      );
+
+function showDevices() {
+  var devicesPr = particle.listDevices({ auth: token });
+
+  devicesPr.then(
+    function(devices){
+      devBox.innerHTML = 'Devices: ' + JSON.stringify(devices);
+      DEVICE_ID = devices.body[0].id;
+    },
+    function(err) {
+      devBox.innerHTML = 'List devices call failed: ' + err;
+    }
+  );
+}
+
+
+function changeState(state) {
+  var fnPr = particle.callFunction({ deviceId: DEVICE_ID, 
+                                     name: 'setStatus', 
+                                     argument: state, 
+                                     auth: token });
+
+fnPr.then(
+  function(data) {
+    console.log('Function called succesfully:', data);
+  }, function(err) {
+    console.log('An error occurred:', err);
+  });
+
+}
+</script>
+
+
+</html>
