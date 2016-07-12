@@ -15,6 +15,11 @@
 
 <button onclick='changeState("OFF")'>Turn Off</button>
 
+</br>
+</br>
+
+<div id='reading_output'></div>
+
 <script type="text/javascript" src="//cdn.jsdelivr.net/particle-api-js/5/particle.min.js">
 </script>
 
@@ -23,6 +28,7 @@
 var particle = new Particle(),
     msg = document.getElementById('message'),
     devBox = document.getElementById('device_list_Box'),
+    readingOutput = document.getElementById('reading_output'),
     token,
     DEVICE_ID;
 
@@ -66,6 +72,19 @@ fnPr.then(
   });
 
 }
+
+function readMeter() {
+  particle.getVariable({ deviceId: DEVICE_ID,
+                         name: 'duration'
+                         auth: token}).then(function(data) {
+    readingOutput.innerHTML = 'Device variable retrieved successfully:' + JSON.stringify(data);
+    }, function(err) {
+    readingOutput.innerHTML = 'An error occurred while getting attrs:' + err;
+  });
+}
+
+setInterval(readMeter, 1000);
+
 </script>
 
 
