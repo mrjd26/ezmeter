@@ -1,42 +1,110 @@
 <!DOCTYPE html5>
 
 <html>
-
-<p> Connecting to Particle ... </p>
-<div id="message"></div>
-
-
-<button onclick='showDevices()'>list devices</button>
-
-<div id='device_list_Box'></div>
-
-
-<button onclick='changeState("ON")'>Turn On</button>
-
-<button onclick='changeState("OFF")'>Turn Off</button>
+<div style='width:80%; height:50px; margin:auto'>
+  <div style='height:50px; float:left; font-family:verdana; font-size: 40px'>Meter Id: </div>
+  <div style='height:50px; color:blue; font-family:verdana; font-size: 45px' id='meter_id'>??</div>
+</div>
+</br>
+<div style='width:60%; height:50px; margin:auto'>
+  <div style='height:50px; float:left; font-family:verdana; font-size:40px'>Meter State: </div>
+  <div id='meter_status_box' style='height:50px;font-family:verdana; font-size:45px'></div>
+</div>
+</br>
+<div style='width:20%; margin:auto;'>
+ <button style='float:left' onclick='changeState("ON")'>Turn On</button>
+ <button onclick='changeState("OFF")'>Turn Off</button>
+</div>
+</br>
 
 </br>
-</br>
+<div id='chart'></div>
+<script src="//d3js.org/d3.v3.min.js"></script>
+<script type="text/javascript" src="//cdn.jsdelivr.net/particle-api-js/5/particle.min.js"></script>
+<script>
 
-<div id='reading_output'></div>
+var margin = {top: 20, right: 20, bottom: 30, left: 250},
+  width = 1300 - margin.left - margin.right,
+  height = 500 - margin.top - margin.bottom;
 
-<script type="text/javascript" src="//cdn.jsdelivr.net/particle-api-js/5/particle.min.js">
+  var x = d3.scale.linear().range([0, width]);
+  var y = d3.scale.linear().range([height, 0]);
+
+  var xAxis = d3.svg.axis().scale(x).orient("bottom");
+  var yAxis = d3.svg.axis().scale(y).orient("left");
+
+  var area = d3.svg.area()
+      .x(function(d) { return x(d.x); })
+      .y0(height)
+      .y1(function(d) { return y(d.y); });
+
+  var svg = d3.select("div#chart").append("svg")
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom)
+    .append("g")
+      .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+  var data = [[0,0]];
+
+  var dataCallback = function(d) {
+    d.x = +d[0];
+    d.y = +d[1];
+  };
+  data.forEach(dataCallback);
+
+  x.domain(d3.extent(data, function(d) { return d.x; }));
+  y.domain([0, d3.max(data, function(d) { return d.y; })]);
+
+  svg.append("path")
+      .data([data])
+      .attr("class", "area")
+      .attr("d", area);
+
+  svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + height + ")")
+      .call(xAxis)
+    .append("text")
+      .attr("x", 6)
+      .attr("dx", ".71em");
+
+  svg.append("g")
+      .attr("class", "y axis")
+      .call(yAxis)
+    .append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("y", 6)
+      .attr("dy", ".71em")
+      .style("text-anchor", "end")
+      .text("Meter Reading: Gpm");
+
+function update() {
+  dataCallback(data[data.length - 1]);	    
+  x.domain(d3.extent(data, function(d) { return d.x; }));
+  y.domain([0, d3.max(data, function(d) { return d.y; })]);
+    
+  svg.select("g.x.axis").call(xAxis); 
+  svg.selectAll("path").data([data]).attr("d", area);
+}
 </script>
+
 
 <script> 
 
 var particle = new Particle(),
-    msg = document.getElementById('message'),
-    devBox = document.getElementById('device_list_Box'),
-    readingOutput = document.getElementById('reading_output'),
+    meterId = document.getElementById('meter_id'),
+    meterStatusBox = document.getElementById('meter_status_box'),
+    dataPoints = 0,
     token,
+    meterState = 'OFF',
+    meterReading,
     DEVICE_ID;
 
     particle.login({username: 'mkejrvs@gmail.com', password: 'Guitar007'})
       .then(
         function(data) {
-          msg.innerHTML = 'API call completed on promise resolve: '; 
           token = data.body.access_token;
+          showDevices();
         },
         function(err) {
           msg.innerHTML = 'API call completed on promise fail: ' + err;
@@ -48,42 +116,83 @@ function showDevices() {
 
   devicesPr.then(
     function(devices){
-      devBox.innerHTML = 'Devices: ' + JSON.stringify(devices);
       DEVICE_ID = devices.body[0].id;
+      meterId.innerHTML = DEVICE_ID.replace(/['"]+/g, '');
     },
     function(err) {
-      devBox.innerHTML = 'List devices call failed: ' + err;
+      meterId.innerHTML = 'List devices call failed: ' + err;
     }
   );
 }
-
 
 function changeState(state) {
   var fnPr = particle.callFunction({ deviceId: DEVICE_ID, 
                                      name: 'setStatus', 
                                      argument: state, 
                                      auth: token });
-
 fnPr.then(
   function(data) {
     console.log('Function called succesfully:', data);
   }, function(err) {
     console.log('An error occurred:', err);
   });
-
+  meterState = state;
 }
 
 function readMeter() {
   particle.getVariable({ deviceId: DEVICE_ID,
-                         name: 'duration'
-                         auth: token}).then(function(data) {
-    readingOutput.innerHTML = 'Device variable retrieved successfully:' + JSON.stringify(data);
-    }, function(err) {
-    readingOutput.innerHTML = 'An error occurred while getting attrs:' + err;
-  });
+                         name: 'buffer',
+                         auth: token}).then(
+                                               function(data) {
+                                                   console.log('result of call: ' + JSON.stringify(data.body.result));
+                                                   meterReading = data.body.result;
+                                               }, 
+                                               function(err) {
+                                                   console.log('error' + JSON.stringify(err));
+                                                   meterReading = 0;
+                                               }
+                                       );
 }
 
-setInterval(readMeter, 1000);
+setInterval(function() {
+
+  if(meterState === 'ON') {
+    readMeter();
+  }
+
+  if(meterReading === null || meterReading === undefined || meterState === 'OFF') {
+    meterReading = 0;
+  }
+
+  //pulse in microseconds uS
+  meterReading = parseFloat(meterReading);
+  // in seconds...
+
+  meterReading = meterReading/1000000;
+
+  if(meterReading != 0 ) {
+    //pulses per second
+    var pulsesPerSecond = 1 / meterReading;
+  } else {
+    var pulsesPerSecond = 0;
+  }
+  //constant from datasheet 330 pulses per liter
+  var litersPerSecond = pulsesPerSecond / 330;
+
+  var gallonsPerSecond = litersPerSecond / 4;
+
+  var gallonsPerMinute = gallonsPerSecond * 60;
+
+  if(gallonsPerMinute <= 13) {
+    dataPoints++;
+    data.push([dataPoints, gallonsPerMinute]);
+  }
+
+  console.log('data: ' + JSON.stringify(data));
+
+  update();
+  meterStatusBox.innerHTML = JSON.stringify(meterState);
+}, 200);
 
 </script>
 
